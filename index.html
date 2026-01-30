@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sokoban Speedrun Pro - Mobile Optimized</title>
+    <style>
+        :root { --bg: #f0f2f5; --panel: #ffffff; --accent: #3498db; --danger: #e74c3c; --success: #2ecc71; --text: #2c3e50; }
+        * { touch-action: none; } /* 禁用瀏覽器默認縮放/滾動，防止干擾遊戲 */
+        body { background: var(--bg); display: flex; flex-direction: column; align-items: center; font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); margin: 0; overflow: hidden; height: 100vh; }
+        
+        /* 頂部 UI */
+        #ui { 
+            margin: 10px 0; padding: 10px 20px; 
+            background: var(--panel); border-radius: 30px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            display: flex; gap: 20px; font-weight: 600; font-size: 14px;
+        }
+        .stat-item span { color: var(--accent); font-family: 'Courier New', monospace; font-size: 1.1em; }
+        
+        #game-container { position: relative; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+        canvas { background: var(--panel); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 95vw; max-height: 70vh; }
+        
+        /* 操作提示 */
+        #hint { margin: 10px; color: #7f8c8d; font-size: 0.85rem; text-align: center; }
+        #hint kbd { background: #eee; padding: 2px 4px; border-radius: 4px; border: 1px solid #ccc; }
+
+        /* 結算彈窗 */
+        .modal { 
+            display: none; position: fixed; inset: 0; 
+            background: rgba(0,0,0,0.92); backdrop-filter: blur(10px);
+            color: white; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
+        }
+        .modal-content {
+            background: #fff; color: #333; padding: 30px; border-radius: 24px;
+            width: 85%; max-width: 400px; text-align: center;
+        }
+        .result-line { display: flex; justify-content: space-between; margin: 10px 0; font-size: 16px; border-bottom: 1px solid #f1f1f1; padding-bottom: 5px; }
+        .score-box { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 15px; }
+        .score-val { font-size: 48px; font-weight: 800; color: var(--danger); }
+        
+        button { margin-top: 20px; padding: 12px 40px; border: none; border-radius: 10px; background: var(--accent); color: white; font-weight: bold; cursor: pointer; }
+        #msg { position: fixed; top: 15%; font-size: 28px; color: var(--success); font-weight: 900; opacity: 0; transition: 0.4s; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="msg">LEVEL COMPLETE</div>
+    <div id="ui">
+        <div class="stat-item">關卡: <span id="lv">1</span>/12</div>
+        <div class="stat-item">時間: <span id="st">0</span>s</div>
+        <div class="stat-item">步數: <span id="steps">0</span></div>
+        <div class="stat-item">重置: <span id="rs" style="color:var(--danger)">0</span></div>
+    </div>
+    
+    <div id="game-container">
+        <canvas id="cvs"></canvas>
+        <div id="hint">手機端：滑動螢幕移動 / 點擊兩次上方「重置」欄位重置<br>電腦端：方向鍵移動 / <kbd>R</kbd> 重置</div>
+    </div>
+
+    <div id="res" class="modal">
+        <div class="modal-content">
+            <h2 style="margin:0 0 10px 0;">挑戰紀錄</h2>
+            <div class="result-line"><span>總步數:</span><span id="f-steps">0</span></div>
+            <div class="result-line"><span>最佳步數:</span><span id="f-min">0</span></div>
+            <div class="result-line"><span>純耗時:</span><span id="f-pure">0s</span></div>
+            <div class="result-line"><span>重置罰時:</span><span id="f-penalty">+0s</span></div>
+            <div class="score-box">
+                <div id="f-score" class="score-val">0</div>
+                <div id="f-rank" style="font-weight:bold; color:var(--accent)">RANK: C</div>
+            </div>
+            <button onclick="location.reload()">重新開始</button>
+        </div>
+    </div>
+
+<script>
+const TILE = 70;
+const ctx = document.getElementById('cvs').getContext('2d');
+let levels = [], queue = [], curIdx = 0, isSwitching = false;
+let state = { p:{x:0, y:0, rx:0, ry:0}, b:[], walls:[], targets:[], resets:0, totalSteps:0, sumMinSteps:0, startTime:0, finished:false };
+
+// --- 滑動手勢邏輯 ---
+let touchStart = null;
+document.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+document.addEventListener('touchend', e => {
+    if (!touchStart || isSwitching || state.finished) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    const absX = Math.abs(dx), absY = Math.abs(dy);
+    if (Math.max(absX, absY) > 30) { // 滑動距離閾值
+        if (absX > absY) move(dx > 0 ? 1 : -1, 0);
+        else move(0, dy > 0 ? 1 : -1);
+    }
+    touchStart = null;
+});
+
+// 為了方便手機端重置，點擊 UI 的重置計數器即可觸發
+document.getElementById('rs').parentElement.onclick = () => { if(confirm("確定要重置本關嗎？(將扣500分)")) resetLevel(true); };
+
+async function init() {
+    try {
+        const r = await fetch('levels.json');
+        levels = await r.json();
+        queue = levels.sort(() => .5 - Math.random()).slice(0, 12);
+        state.startTime = Date.now();
+        loadLevel(0);
+        requestAnimationFrame(loop);
+    } catch (e) { alert("請確保 levels.json 存在。"); }
+}
+
+function loadLevel(idx) {
+    const d = queue[idx];
+    state.walls = d.walls; state.targets = d.targets;
+    state.initP = d.player; state.initB = d.boxes;
+    state.sumMinSteps += d.min;
+    state.p.x = d.player[0]; state.p.y = d.player[1];
+    state.p.rx = d.player[0] * TILE; state.p.ry = d.player[1] * TILE;
+    state.b = d.boxes.map(b => ({ x: b[0], y: b[1], rx: b[0]*TILE, ry: b[1]*TILE }));
+    isSwitching = false;
+}
+
+function resetLevel(manual) {
+    if(isSwitching || state.finished) return;
+    state.p.x = state.initP[0]; state.p.y = state.initP[1];
+    state.b = state.initB.map(b => ({ x: b[0], y: b[1], rx: b[0]*TILE, ry: b[1]*TILE }));
+    if(manual) state.resets++;
+}
+
+function move(dx, dy) {
+    if(state.finished || isSwitching) return;
+    let nx = state.p.x + dx, ny = state.p.y + dy;
+    if(state.walls[ny][nx] === 1) return;
+    let bi = state.b.findIndex(b => b.x === nx && b.y === ny);
+    if(bi !== -1) {
+        let bx = nx + dx, by = ny + dy;
+        if(state.walls[by][bx] === 1 || state.b.some(b => b.x===bx && b.y===by)) return;
+        state.b[bi].x = bx; state.b[bi].y = by;
+    }
+    state.p.x = nx; state.p.y = ny;
+    state.totalSteps++;
+}
+
+function loop() {
+    if(state.finished) return;
+    state.p.rx += (state.p.x * TILE - state.p.rx) * 0.25;
+    state.p.ry += (state.p.y * TILE - state.p.ry) * 0.25;
+    state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.25; b.ry += (b.y * TILE - b.ry) * 0.25; });
+    draw();
+    updateUI();
+    if(!isSwitching && state.b.every(b => state.targets.some(t => t[0]===b.x && t[1]===b.y))) triggerWin();
+    requestAnimationFrame(loop);
+}
+
+function triggerWin() {
+    isSwitching = true;
+    if (curIdx < 11) {
+        document.getElementById('msg').style.opacity = 1;
+        setTimeout(() => { document.getElementById('msg').style.opacity = 0; curIdx++; loadLevel(curIdx); }, 600);
+    } else {
+        state.finished = true;
+        showFinalResult();
+    }
+}
+
+function draw() {
+    const d = state.walls;
+    ctx.canvas.width = d[0].length * TILE; ctx.canvas.height = d.length * TILE;
+    d.forEach((r,y) => r.forEach((v,x) => {
+        if(v===1) { ctx.fillStyle="#cfd8dc"; ctx.beginPath(); ctx.roundRect(x*TILE+4, y*TILE+4, TILE-8, TILE-8, 12); ctx.fill(); }
+    }));
+    state.targets.forEach(t => {
+        ctx.strokeStyle="#b2bec3"; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, 10, 0, 7); ctx.stroke();
+    });
+    state.b.forEach(b => {
+        const ok = state.targets.some(t => t[0]===b.x && t[1]===b.y);
+        ctx.fillStyle = ok ? "#55efc4" : "#ffb142";
+        ctx.beginPath(); ctx.roundRect(b.rx+14, b.ry+14, TILE-28, TILE-28, 8); ctx.fill();
+    });
+    ctx.fillStyle="#3498db";
+    ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, 22, 0, 7); ctx.fill();
+}
+
+function updateUI() {
+    const elapsed = Math.floor((Date.now() - state.startTime)/1000);
+    document.getElementById('lv').innerText = curIdx + 1;
+    document.getElementById('st').innerText = elapsed + (state.resets * 10);
+    document.getElementById('steps').innerText = state.totalSteps;
+    document.getElementById('rs').innerText = state.resets;
+}
+
+function showFinalResult() {
+    const pureTime = Math.floor((Date.now() - state.startTime)/1000);
+    const penaltyTime = state.resets * 10;
+    const totalTime = pureTime + penaltyTime;
+    let stepRatio = state.sumMinSteps / state.totalSteps;
+    let stepScore = Math.round(5000 * Math.pow(stepRatio, 1.5)); 
+    let timeScore = Math.max(0, 5000 - (totalTime - 150) * 50);
+    let finalScore = Math.max(0, stepScore + timeScore - (state.resets * 500));
+    let rank = finalScore >= 9200 ? "S" : finalScore >= 8000 ? "A" : finalScore >= 6000 ? "B" : "C";
+
+    document.getElementById('f-steps').innerText = state.totalSteps;
+    document.getElementById('f-min').innerText = state.sumMinSteps;
+    document.getElementById('f-pure').innerText = pureTime + "s";
+    document.getElementById('f-penalty').innerText = "+" + penaltyTime + "s";
+    document.getElementById('f-score').innerText = finalScore.toLocaleString();
+    document.getElementById('f-rank').innerText = "RANK: " + rank;
+    document.getElementById('res').style.display = 'flex';
+}
+
+window.onkeydown = e => {
+    if(e.key.includes("Arrow")) e.preventDefault();
+    if(e.key === "ArrowUp") move(0,-1);
+    if(e.key === "ArrowDown") move(0,1);
+    if(e.key === "ArrowLeft") move(-1,0);
+    if(e.key === "ArrowRight") move(1,0);
+    if(e.key === "r") resetLevel(true);
+};
+
+init();
+</script>
+</body>
+</html>
