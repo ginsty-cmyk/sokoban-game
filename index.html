@@ -10,12 +10,11 @@
             --bg: #050505; --panel: rgba(30, 30, 30, 0.85); --accent: #00d2ff; 
             --danger: #ff0040; --success: #00ff88; --text: #ffffff; 
         }
-        /* 核心修复：禁止所有默认手势（缩放、滚动、橡皮筋效果） */
         * { 
             user-select: none; 
             -webkit-tap-highlight-color: transparent; 
             box-sizing: border-box; 
-            /* 核心：禁止全局手势，防止画布乱跑和缩放 */
+            /* 允许手势用于 JS 监听 */
             touch-action: none; 
         }
         body { 
@@ -52,13 +51,12 @@
         #reset-btn {
             background: none; color: var(--danger); border: 2px solid var(--danger); padding: 8px 18px;
             font-family: 'Orbitron'; font-weight: 900; cursor: pointer; transition: 0.2s;
-            /* 允许按钮点击，但禁止双击缩放 */
             touch-action: manipulation; 
         }
         #reset-btn:hover { background: var(--danger); color: white; }
 
         #game-container { position: relative; flex-grow: 1; display: flex; justify-content: center; align-items: center; width: 100%; z-index: 5; }
-        canvas#cvs { background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(0, 210, 255, 0.3); }
+        canvas#cvs { background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(0, 210, 255, 0.3); outline: none;}
 
         .modal { 
             display: none; position: fixed; inset: 0; 
@@ -107,7 +105,7 @@
     </div>
 
 <script>
-/** * 背景与基础变量 */
+/** * 基础变量与初始化 */
 const bgCanvas = document.getElementById('bg-canvas');
 const bgCtx = bgCanvas.getContext('2d');
 const canvas = document.getElementById('cvs');
@@ -116,7 +114,6 @@ let stars = [], levels = [], queue = [], TILE = 70;
 let curIdx = 0, isSwitching = false;
 let state = { p:{x:0, y:0, rx:0, ry:0}, b:[], walls:[], targets:[], resets:0, totalSteps:0, sumMinSteps:0, startTime:0, finished:false };
 
-/** * 星际跃迁初始化 */
 function initStars() {
     bgCanvas.width = window.innerWidth; bgCanvas.height = window.innerHeight;
     stars = [];
@@ -135,23 +132,19 @@ function drawStars() {
     bgCtx.restore(); requestAnimationFrame(drawStars);
 }
 
-/** * 核心逻辑 */
+/** * 核心控制逻辑 */
 async function startGame() {
     try {
-        // 加载关卡，增加版本号防止缓存导致加载失败
         const r = await fetch('levels.json?v=' + Date.now());
         if (!r.ok) throw new Error("File not found");
         levels = await r.json();
         queue = levels.sort(() => .5 - Math.random()).slice(0, 12);
-        
         state.startTime = Date.now();
         loadLevel(0);
-        
-        // 确保在数据加载后才启动主循环
         requestAnimationFrame(gameLoop);
     } catch (e) {
         console.error(e);
-        alert("关卡数据加载失败！请确保 levels.json 在同级目录并已上传 GitHub。");
+        alert("关卡加载失败！");
     }
 }
 
@@ -160,16 +153,23 @@ function loadLevel(idx) {
     state.walls = d.walls; state.targets = d.targets;
     state.initP = d.player; state.initB = d.boxes;
     state.sumMinSteps += d.min;
-    
-    // 动态瓦片计算，防止大地图不显示
     const maxRows = d.walls.length, maxCols = d.walls[0].length;
     const screenFit = Math.min((window.innerWidth*0.8)/maxCols, (window.innerHeight*0.5)/maxRows);
     TILE = Math.min(screenFit, 70); 
-
     state.p.x = d.player[0]; state.p.y = d.player[1];
     state.p.rx = d.player[0] * TILE; state.p.ry = d.player[1] * TILE;
     state.b = d.boxes.map(b => ({ x: b[0], y: b[1], rx: b[0]*TILE, ry: b[1]*TILE }));
     isSwitching = false;
+}
+
+function performReset() {
+    if(state.finished || isSwitching) return;
+    if(confirm("ABORT MISSION? -500 PTS")) {
+        state.p.x = state.initP[0]; state.p.y = state.initP[1];
+        state.b = state.initB.map(b => ({x:b[0], y:b[1], rx:b[0]*TILE, ry:b[1]*TILE}));
+        state.resets++;
+    }
+    canvas.focus();
 }
 
 function move(dx, dy) {
@@ -184,20 +184,54 @@ function move(dx, dy) {
     }
     state.p.x = nx; state.p.y = ny;
     state.totalSteps++;
-    // 动作反馈
     const t = document.getElementById('st');
     t.classList.remove('pulse'); void t.offsetWidth; t.classList.add('pulse');
 }
 
+/** * 统一输入监听 (解决移动两格和手机锁死) */
+// 1. 键盘监听 (唯一)
+window.addEventListener('keydown', e => {
+    if (state.finished || isSwitching) return;
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+    const k = e.key.toLowerCase();
+    if(k==="arrowup"||k==="w") move(0,-1); 
+    else if(k==="arrowdown"||k==="s") move(0,1);
+    else if(k==="arrowleft"||k==="a") move(-1,0); 
+    else if(k==="arrowright"||k==="d") move(1,0);
+    else if(k==="r") performReset();
+});
+
+// 2. 滑动手势监听 (重新激活手机端)
+let touchStart = null;
+document.addEventListener('touchstart', e => { 
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; 
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+    if (!touchStart || isSwitching || state.finished) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
+        if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
+        else move(0, dy > 0 ? 1 : -1);
+    }
+    touchStart = null;
+}, { passive: false });
+
+// 3. 重置按钮
+document.getElementById('reset-btn').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    performReset();
+});
+
+/** * 渲染与循环 */
 function gameLoop() {
     if(!state.finished) {
         state.p.rx += (state.p.x * TILE - state.p.rx) * 0.3;
         state.p.ry += (state.p.y * TILE - state.p.ry) * 0.3;
         state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.3; b.ry += (b.y * TILE - b.ry) * 0.3; });
-        
         drawGame();
         updateUI();
-        
         if(!isSwitching && state.b.every(b => state.targets.some(t => t[0]===b.x && t[1]===b.y))) {
             isSwitching = true;
             document.getElementById('msg').style.opacity = 1;
@@ -215,7 +249,6 @@ function drawGame() {
     const d = state.walls;
     canvas.width = d[0].length * TILE; canvas.height = d.length * TILE;
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    
     d.forEach((r,y) => r.forEach((v,x) => {
         if(v===1) { 
             ctx.fillStyle="#1a1a1a"; ctx.beginPath(); ctx.roundRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4, 4); ctx.fill(); 
@@ -258,52 +291,9 @@ function showFinalResult() {
     document.getElementById('res').style.display = 'flex';
 }
 
-/** * 启动执行 */
-window.addEventListener('keydown', e => {
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
-    const k = e.key.toLowerCase();
-    if(k==="arrowup"||k==="w") move(0,-1); if(k==="arrowdown"||k==="s") move(0,1);
-    if(k==="arrowleft"||k==="a") move(-1,0); if(k==="arrowright"||k==="d") move(1,0);
-    if(k==="r") { canvas.focus(); if(confirm("ABORT MISSION?")) { state.p.x=state.initP[0]; state.p.y=state.initP[1]; state.b=state.initB.map(b=>({x:b[0],y:b[1],rx:b[0]*TILE,ry:b[1]*TILE})); state.resets++; } }
-});
-
-canvas.tabIndex = 1; 
 initStars(); 
 drawStars();
-    /** * 手机端重置按钮专项修复 */
-const resetBtn = document.getElementById('reset-btn');
-
-function performReset() {
-    if(state.finished || isSwitching) return;
-    // 使用 confirm 会导致手机端失去触控焦点，建议点击后立刻获取焦点
-    if(confirm("ABORT MISSION? -500 PTS")) {
-        state.p.x = state.initP[0];
-        state.p.y = state.initP[1];
-        state.b = state.initB.map(b => ({x:b[0], y:b[1], rx:b[0]*TILE, ry:b[1]*TILE}));
-        state.resets++;
-    }
-    canvas.focus();
-}
-
-// 绑定触摸/点击事件，pointerdown 解决移动端延迟
-resetBtn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    performReset();
-});
-
-// 修正键盘监听里的 R 键逻辑，确保两者调用同一个函数
-window.addEventListener('keydown', e => {
-    if (state.finished || isSwitching) return;
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
-    const k = e.key.toLowerCase();
-    if(k==="arrowup"||k==="w") move(0,-1); 
-    if(k==="arrowdown"||k==="s") move(0,1);
-    if(k==="arrowleft"||k==="a") move(-1,0); 
-    if(k==="arrowright"||k==="d") move(1,0);
-    if(k==="r") performReset(); // 调用统一的重置函数
-});
-startGame(); // 确保最后调用
+startGame();
 </script>
 </body>
 </html>
-
