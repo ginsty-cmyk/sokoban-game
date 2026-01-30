@@ -3,85 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sokoban Speedrun: Particle Edition</title>
+    <title>Sokoban Speedrun: HYPER-SPEED</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <style>
         :root { 
-            --bg: #0d0d0d; --panel: #1e1e1e; --accent: #00a8ff; 
-            --danger: #ff4757; --success: #2ed573; --text: #f1f2f6; 
+            --bg: #050505; --panel: rgba(30, 30, 30, 0.85); --accent: #00d2ff; 
+            --danger: #ff0040; --success: #00ff88; --text: #ffffff; 
         }
         * { user-select: none; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { 
             background: var(--bg); display: flex; flex-direction: column; align-items: center; 
-            font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); 
+            font-family: 'Orbitron', sans-serif; color: var(--text); 
             margin: 0; overflow: hidden; height: 100vh; position: relative;
         }
         
-        /* 背景粒子层 */
-        #bg-canvas {
-            position: absolute; top: 0; left: 0; z-index: -1;
-            width: 100%; height: 100%;
-        }
+        /* 1. 速度感背景：星际跃迁效果 */
+        #bg-canvas { position: absolute; top: 0; left: 0; z-index: -1; width: 100%; height: 100%; }
 
+        /* 2. 毫秒级计时器美化 */
         #timer-box {
-            margin-top: 20px; text-align: center; background: rgba(255,255,255,0.05);
-            padding: 10px 40px; border-radius: 15px; border-left: 5px solid var(--danger);
-            backdrop-filter: blur(5px); z-index: 10;
+            margin-top: 25px; text-align: center; background: var(--panel);
+            padding: 15px 40px; border-radius: 4px; border-right: 4px solid var(--danger);
+            box-shadow: 0 0 20px rgba(255, 0, 64, 0.3); z-index: 10;
         }
         #st { 
-            font-family: 'Courier New', monospace; font-size: 4rem; 
-            font-weight: 900; color: var(--danger); text-shadow: 0 0 15px rgba(255, 71, 87, 0.5);
-            line-height: 1;
+            font-family: 'Share Tech Mono', monospace; font-size: 3.5rem; 
+            font-weight: bold; color: var(--danger); text-shadow: 0 0 10px rgba(255, 0, 64, 0.8);
+            line-height: 1; display: inline-block;
         }
-        .timer-label { font-size: 0.8rem; text-transform: uppercase; color: #888; letter-spacing: 2px; }
+        .ms { font-size: 1.5rem; opacity: 0.8; margin-left: 2px; }
+        .timer-label { font-size: 0.7rem; text-transform: uppercase; color: #aaa; letter-spacing: 4px; margin-bottom: 5px;}
 
-        #ui-stats { 
-            margin: 15px 0; display: flex; gap: 20px; font-size: 1.1rem; font-weight: bold; align-items: center; z-index: 10;
+        /* 数字跳动动感动画 */
+        .pulse { animation: pulse 0.1s linear; }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
         }
-        .stat-item span { color: var(--accent); }
+
+        #ui-stats { margin: 15px 0; display: flex; gap: 20px; font-size: 1rem; align-items: center; z-index: 10; letter-spacing: 1px;}
+        .stat-item span { color: var(--accent); font-weight: 900; }
 
         #reset-btn {
-            background: var(--danger); color: white; border: none; padding: 10px 20px;
-            border-radius: 10px; font-weight: bold; font-size: 0.9rem; cursor: pointer;
-            box-shadow: 0 4px 0 #b33939; transition: 0.1s; outline: none;
+            background: none; color: var(--danger); border: 2px solid var(--danger); padding: 8px 18px;
+            font-family: 'Orbitron'; font-weight: 900; cursor: pointer; transition: 0.2s;
         }
-        #reset-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #b33939; }
+        #reset-btn:hover { background: var(--danger); color: white; box-shadow: 0 0 15px var(--danger); }
 
-        #game-container { 
-            position: relative; flex-grow: 1; display: flex; 
-            flex-direction: column; align-items: center; justify-content: center; 
-            width: 100%; touch-action: none; z-index: 5;
-        }
-        canvas#cvs { 
-            background: rgba(45, 45, 45, 0.8); border-radius: 12px; 
-            box-shadow: 0 0 50px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-        }
+        #game-container { position: relative; flex-grow: 1; display: flex; justify-content: center; align-items: center; width: 100%; z-index: 5; }
+        canvas#cvs { background: rgba(10, 10, 10, 0.9); border: 1px solid rgba(0, 210, 255, 0.3); box-shadow: 0 0 40px rgba(0,0,0,1); }
 
+        /* 3. 最终结算面板美化 */
         .modal { 
             display: none; position: fixed; inset: 0; 
-            background: rgba(0,0,0,0.95); backdrop-filter: blur(15px);
-            color: white; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
+            background: rgba(0,0,0,0.98); backdrop-filter: blur(20px);
+            justify-content: center; align-items: center; z-index: 100; 
         }
-        .modal-content { background: #fff; color: #333; padding: 30px; border-radius: 24px; width: 85%; max-width: 400px; text-align: center; }
-        .score-val { font-size: 50px; font-weight: 900; color: var(--danger); line-height: 1.2; }
+        .modal-content { 
+            background: linear-gradient(145deg, #111, #222); color: #fff; padding: 40px; 
+            border: 1px solid var(--accent); width: 90%; max-width: 450px; text-align: center;
+            box-shadow: 0 0 50px rgba(0, 210, 255, 0.2);
+        }
+        .modal-content h2 { font-weight: 900; letter-spacing: 5px; color: var(--accent); margin-bottom: 30px; }
+        .score-val { font-size: 60px; font-weight: 900; color: var(--danger); font-family: 'Orbitron'; text-shadow: 0 0 20px var(--danger); }
+        .result-grid { 
+            text-align: left; margin: 25px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+            font-family: 'Share Tech Mono'; border-top: 1px solid #333; padding-top: 20px;
+        }
+        .result-label { color: #888; font-size: 0.8rem; }
+        .result-data { color: #fff; font-size: 1.1rem; display: block; }
         
-        #msg { position: fixed; top: 15%; font-size: 32px; color: var(--success); font-weight: 900; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 50; }
+        #msg { position: fixed; top: 15%; font-size: 40px; color: var(--success); font-weight: 900; opacity: 0; transition: 0.2s; pointer-events: none; text-shadow: 0 0 20px var(--success); z-index: 50; }
     </style>
 </head>
 <body>
     <canvas id="bg-canvas"></canvas>
-
-    <div id="msg">LEVEL CLEAR</div>
+    <div id="msg">GOAL!!!</div>
     
     <div id="timer-box">
-        <div class="timer-label">Extreme Pressure</div>
-        <div id="st">000</div>
+        <div class="timer-label">Mission Elapsed</div>
+        <div id="st">00.000</div>
     </div>
 
     <div id="ui-stats">
-        <div class="stat-item">LV: <span id="lv">1</span>/12</div>
-        <div class="stat-item">STEPS: <span id="steps">0</span></div>
-        <button id="reset-btn">RESET (R)</button>
+        <div class="stat-item">SECTOR: <span id="lv">1</span>/12</div>
+        <div class="stat-item">STP: <span id="steps">0</span></div>
+        <button id="reset-btn">ABORT (R)</button>
     </div>
     
     <div id="game-container">
@@ -90,69 +98,94 @@
 
     <div id="res" class="modal">
         <div class="modal-content">
-            <h2 style="margin:0">CHALLENGE COMPLETE</h2>
+            <h2>DEBRIEFING</h2>
             <div id="f-score" class="score-val">0</div>
-            <p id="f-rank" style="font-weight:bold; font-size:1.5rem; color:var(--accent); margin:5px 0;">RANK: C</p>
-            <div style="text-align:left; margin: 15px 0; border-top: 1px solid #eee; padding-top: 10px; font-size: 0.9rem; line-height: 1.6;">
-                <div>总移动步数: <span id="f-steps" style="font-weight:bold">0</span></div>
-                <div>纯操作耗时: <span id="f-pure">0</span>s</div>
-                <div>重置罚时: <span id="f-penalty" style="color:var(--danger)">+0</span>s</div>
+            <p id="f-rank" style="font-weight:900; font-size:2rem; color:var(--success); margin:10px 0;">RANK: S</p>
+            
+            <div class="result-grid">
+                <div><span class="result-label">TOTAL STEPS</span><span class="result-data" id="f-steps">0</span></div>
+                <div><span class="result-label">MIN STEPS REF</span><span class="result-data" id="f-min" style="color:var(--success)">0</span></div>
+                <div><span class="result-label">PURE TIME</span><span class="result-data" id="f-pure">0s</span></div>
+                <div><span class="result-label">PENALTY</span><span class="result-data" id="f-penalty" style="color:var(--danger)">+0s</span></div>
             </div>
-            <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">RESTART</button>
+            <button onclick="location.reload()" style="background:var(--accent); color:#000; border:none; padding:15px 40px; font-family:'Orbitron'; font-weight:900; cursor:pointer; width:100%;">RE-ENGAGE</button>
         </div>
     </div>
 
 <script>
-/** * 粒子背景系统 
- */
+/** * 星际跃迁背景 (体现速度感) */
 const bgCanvas = document.getElementById('bg-canvas');
 const bgCtx = bgCanvas.getContext('2d');
-let particles = [];
+let stars = [];
+const starCount = 400;
 
-function initParticles() {
+function initStars() {
     bgCanvas.width = window.innerWidth;
     bgCanvas.height = window.innerHeight;
-    particles = [];
-    for(let i=0; i<60; i++) {
-        particles.push({
-            x: Math.random() * bgCanvas.width,
-            y: Math.random() * bgCanvas.height,
-            size: Math.random() * 2 + 1,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: (Math.random() - 0.5) * 0.5,
-            color: Math.random() > 0.5 ? '#00a8ff' : '#2ed573',
-            opacity: Math.random()
+    stars = [];
+    for(let i=0; i<starCount; i++) {
+        stars.push({
+            x: Math.random() * bgCanvas.width - bgCanvas.width/2,
+            y: Math.random() * bgCanvas.height - bgCanvas.height/2,
+            z: Math.random() * bgCanvas.width,
+            o: Math.random()
         });
     }
 }
 
-function drawParticles() {
-    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-    particles.forEach(p => {
-        p.x += p.vx; p.y += p.vy;
-        if(p.x < 0 || p.x > bgCanvas.width) p.vx *= -1;
-        if(p.y < 0 || p.y > bgCanvas.height) p.vy *= -1;
-        bgCtx.globalAlpha = p.opacity;
-        bgCtx.fillStyle = p.color;
+function drawStars() {
+    bgCtx.fillStyle = '#050505';
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+    bgCtx.save();
+    bgCtx.translate(bgCanvas.width/2, bgCanvas.height/2);
+    
+    stars.forEach(s => {
+        s.z -= (5 + curIdx); // 随着关卡进度变快
+        if(s.z <= 0) s.z = bgCanvas.width;
+        
+        let sx = (s.x / s.z) * bgCanvas.width;
+        let sy = (s.y / s.z) * bgCanvas.height;
+        let size = (1 - s.z / bgCanvas.width) * 3;
+        
+        bgCtx.fillStyle = `rgba(0, 210, 255, ${1 - s.z/bgCanvas.width})`;
         bgCtx.beginPath();
-        bgCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+        bgCtx.arc(sx, sy, size, 0, Math.PI*2);
         bgCtx.fill();
+        
+        // 增加流星连线效果
+        bgCtx.strokeStyle = `rgba(0, 210, 255, ${(1 - s.z/bgCanvas.width)*0.3})`;
+        bgCtx.lineWidth = size;
+        bgCtx.beginPath();
+        bgCtx.moveTo(sx, sy);
+        bgCtx.lineTo(sx * 1.05, sy * 1.05);
+        bgCtx.stroke();
     });
-    requestAnimationFrame(drawParticles);
+    bgCtx.restore();
+    requestAnimationFrame(drawStars);
 }
-window.addEventListener('resize', initParticles);
-initParticles();
-drawParticles();
+window.addEventListener('resize', initStars);
+initStars(); drawStars();
 
-/** * 游戏核心系统 (延续之前的高级逻辑) 
- */
+/** * 游戏逻辑核心 */
 let TILE = 70; 
 const canvas = document.getElementById('cvs');
 const ctx = canvas.getContext('2d');
 let levels = [], queue = [], curIdx = 0, isSwitching = false;
 let state = { p:{x:0, y:0, rx:0, ry:0}, b:[], walls:[], targets:[], resets:0, totalSteps:0, sumMinSteps:0, startTime:0, finished:false };
 
-// 滑动与键盘监听 (保持不变)
+// 操作监听
+window.addEventListener('keydown', e => {
+    if (state.finished || isSwitching) return;
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+    const key = e.key.toLowerCase();
+    if (key === "arrowup" || key === "w") move(0, -1);
+    if (key === "arrowdown" || key === "s") move(0, 1);
+    if (key === "arrowleft" || key === "a") move(-1, 0);
+    if (key === "arrowright" || key === "d") move(1, 0);
+    if (key === "r") resetLevel(true);
+});
+
+// 手势滑动
 let touchStart = null;
 document.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
 document.addEventListener('touchend', e => {
@@ -166,22 +199,10 @@ document.addEventListener('touchend', e => {
     touchStart = null;
 }, { passive: true });
 
-window.addEventListener('keydown', e => {
-    if (state.finished || isSwitching) return;
-    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
-    const key = e.key.toLowerCase();
-    if (key === "arrowup" || key === "w") move(0, -1);
-    if (key === "arrowdown" || key === "s") move(0, 1);
-    if (key === "arrowleft" || key === "a") move(-1, 0);
-    if (key === "arrowright" || key === "d") move(1, 0);
-    if (key === "r") resetLevel(true);
-});
-
-document.getElementById('reset-btn').onclick = () => { canvas.focus(); if(confirm("确定重置？(罚时10s+扣500分)")) resetLevel(true); };
+document.getElementById('reset-btn').onclick = () => { canvas.focus(); if(confirm("ABORT MISSION? -500 PTS")) resetLevel(true); };
 
 async function init() {
-    canvas.tabIndex = 1;
-    canvas.focus();
+    canvas.tabIndex = 1; canvas.focus();
     try {
         const r = await fetch('levels.json');
         levels = await r.json();
@@ -189,20 +210,16 @@ async function init() {
         state.startTime = Date.now();
         loadLevel(0);
         requestAnimationFrame(loop);
-    } catch (e) { alert("Error loading levels.json"); }
+    } catch (e) { alert("Data load failed!"); }
 }
 
 function loadLevel(idx) {
     const d = queue[idx];
-    state.walls = d.walls;
-    state.targets = d.targets;
-    state.initP = d.player;
-    state.initB = d.boxes;
+    state.walls = d.walls; state.targets = d.targets;
+    state.initP = d.player; state.initB = d.boxes;
     state.sumMinSteps += d.min;
-    
     const maxDim = Math.max(d.walls.length, d.walls[0].length);
     TILE = maxDim > 10 ? 45 : 65; 
-
     state.p.x = d.player[0]; state.p.y = d.player[1];
     state.p.rx = d.player[0] * TILE; state.p.ry = d.player[1] * TILE;
     state.b = d.boxes.map(b => ({ x: b[0], y: b[1], rx: b[0]*TILE, ry: b[1]*TILE }));
@@ -228,13 +245,17 @@ function move(dx, dy) {
     }
     state.p.x = nx; state.p.y = ny;
     state.totalSteps++;
+    // 增加计时器抖动反馈
+    document.getElementById('st').classList.remove('pulse');
+    void document.getElementById('st').offsetWidth;
+    document.getElementById('st').classList.add('pulse');
 }
 
 function loop() {
     if(state.finished) return;
-    state.p.rx += (state.p.x * TILE - state.p.rx) * 0.28;
-    state.p.ry += (state.p.y * TILE - state.p.ry) * 0.28;
-    state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.28; b.ry += (b.y * TILE - b.ry) * 0.28; });
+    state.p.rx += (state.p.x * TILE - state.p.rx) * 0.3;
+    state.p.ry += (state.p.y * TILE - state.p.ry) * 0.3;
+    state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.3; b.ry += (b.y * TILE - b.ry) * 0.3; });
     draw();
     updateUI();
     if(!isSwitching && state.b.every(b => state.targets.some(t => t[0]===b.x && t[1]===b.y))) triggerWin();
@@ -248,26 +269,26 @@ function triggerWin() {
         document.getElementById('msg').style.opacity = 0;
         if (curIdx < 11) { curIdx++; loadLevel(curIdx); }
         else { state.finished = true; showFinalResult(); }
-    }, 600);
+    }, 400);
 }
 
 function draw() {
     const d = state.walls;
-    canvas.width = d[0].length * TILE;
-    canvas.height = d.length * TILE;
+    canvas.width = d[0].length * TILE; canvas.height = d.length * TILE;
     d.forEach((r,y) => r.forEach((v,x) => {
-        if(v===1) { ctx.fillStyle="#3a3a3a"; ctx.beginPath(); ctx.roundRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4, 8); ctx.fill(); }
-        else { ctx.fillStyle="rgba(40,40,40,0.5)"; ctx.fillRect(x*TILE, y*TILE, TILE, TILE); }
+        if(v===1) { 
+            ctx.fillStyle="#1a1a1a"; ctx.beginPath(); ctx.roundRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4, 4); ctx.fill(); 
+            ctx.strokeStyle="rgba(0, 210, 255, 0.2)"; ctx.stroke();
+        } else { ctx.fillStyle="rgba(20,20,20,0.6)"; ctx.fillRect(x*TILE, y*TILE, TILE, TILE); }
     }));
     state.targets.forEach(t => {
-        ctx.strokeStyle="rgba(46, 213, 115, 0.6)"; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, TILE/5, 0, 7); ctx.stroke();
+        ctx.strokeStyle=varColor('--success'); ctx.lineWidth=1; ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, TILE/4, 0, 7); ctx.stroke();
     });
     state.b.forEach(b => {
         const ok = state.targets.some(t => t[0]===b.x && t[1]===b.y);
-        ctx.fillStyle = ok ? varColor('--success') : "#e67e22";
-        ctx.beginPath(); ctx.roundRect(b.rx+5, b.ry+5, TILE-10, TILE-10, 8); ctx.fill();
-        if(ok) { ctx.shadowBlur = 10; ctx.shadowColor = varColor('--success'); }
-        else { ctx.shadowBlur = 0; }
+        ctx.fillStyle = ok ? varColor('--success') : "#ff8800";
+        ctx.beginPath(); ctx.roundRect(b.rx+6, b.ry+6, TILE-12, TILE-12, 2); ctx.fill();
+        if(ok) { ctx.shadowBlur = 15; ctx.shadowColor = varColor('--success'); }
     });
     ctx.shadowBlur = 15; ctx.shadowColor = varColor('--accent');
     ctx.fillStyle=varColor('--accent'); ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, TILE/3, 0, 7); ctx.fill();
@@ -277,27 +298,36 @@ function draw() {
 function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name); }
 
 function updateUI() {
-    const elapsed = (Date.now() - state.startTime)/1000;
-    const displayTime = Math.floor(elapsed + (state.resets * 10));
-    document.getElementById('st').innerText = displayTime.toString().padStart(3, '0');
+    // 毫秒级时间计算
+    const elapsed = (Date.now() - state.startTime);
+    const displayMS = elapsed + (state.resets * 10000);
+    const totalSec = Math.floor(displayMS / 1000);
+    const milSec = Math.floor(displayMS % 1000);
+    
+    document.getElementById('st').innerHTML = `${totalSec.toString().padStart(2, '0')}<span class="ms">.${milSec.toString().padStart(3, '0')}</span>`;
     document.getElementById('lv').innerText = curIdx + 1;
     document.getElementById('steps').innerText = state.totalSteps;
 }
 
 function showFinalResult() {
     const pureTime = Math.floor((Date.now() - state.startTime)/1000);
-    const totalTime = pureTime + (state.resets * 10);
-    let stepScore = Math.round(5000 * Math.pow(state.sumMinSteps / state.totalSteps, 1.8)); 
-    let timeScore = 5000 - (totalTime - 150) * 80; 
-    timeScore = Math.min(6000, Math.max(0, timeScore));
+    const penaltyTime = state.resets * 10;
+    const totalTime = pureTime + penaltyTime;
+    
+    let stepRatio = state.sumMinSteps / state.totalSteps;
+    let stepScore = Math.round(5000 * Math.pow(stepRatio, 1.8)); 
+    let timeScore = Math.max(0, 5000 - (totalTime - 150) * 80);
     let finalScore = Math.max(0, stepScore + timeScore - (state.resets * 500));
+    
     let rank = finalScore >= 9500 ? "S" : finalScore >= 8500 ? "A" : finalScore >= 7000 ? "B" : "C";
 
     document.getElementById('f-steps').innerText = state.totalSteps;
-    document.getElementById('f-pure').innerText = pureTime;
-    document.getElementById('f-penalty').innerText = state.resets * 10;
+    document.getElementById('f-min').innerText = state.sumMinSteps; // 显示理论最少步数
+    document.getElementById('f-pure').innerText = pureTime + "s";
+    document.getElementById('f-penalty').innerText = "+" + penaltyTime + "s";
     document.getElementById('f-score').innerText = finalScore.toLocaleString();
     document.getElementById('f-rank').innerText = "RANK: " + rank;
+    document.getElementById('f-rank').style.color = rank === "S" ? "var(--success)" : "var(--accent)";
     document.getElementById('res').style.display = 'flex';
 }
 
