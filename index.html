@@ -1,100 +1,117 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sokoban Speedrun Pro - Mobile Optimized</title>
+    <title>Sokoban Speedrun Hardcore</title>
     <style>
-        :root { --bg: #f0f2f5; --panel: #ffffff; --accent: #3498db; --danger: #e74c3c; --success: #2ecc71; --text: #2c3e50; }
-        * { touch-action: none; } /* 禁用瀏覽器默認縮放/滾動，防止干擾遊戲 */
-        body { background: var(--bg); display: flex; flex-direction: column; align-items: center; font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); margin: 0; overflow: hidden; height: 100vh; }
-        
-        /* 頂部 UI */
-        #ui { 
-            margin: 10px 0; padding: 10px 20px; 
-            background: var(--panel); border-radius: 30px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            display: flex; gap: 20px; font-weight: 600; font-size: 14px;
+        :root { 
+            --bg: #1a1a1a; --panel: #2d2d2d; --accent: #00a8ff; 
+            --danger: #ff4757; --success: #2ed573; --text: #f1f2f6; 
         }
-        .stat-item span { color: var(--accent); font-family: 'Courier New', monospace; font-size: 1.1em; }
+        /* 1. 防止页面滑动晃动 */
+        * { touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { 
+            background: var(--bg); display: flex; flex-direction: column; align-items: center; 
+            font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); margin: 0; overflow: hidden; height: 100vh; 
+        }
         
-        #game-container { position: relative; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-        canvas { background: var(--panel); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 95vw; max-height: 70vh; }
-        
-        /* 操作提示 */
-        #hint { margin: 10px; color: #7f8c8d; font-size: 0.85rem; text-align: center; }
-        #hint kbd { background: #eee; padding: 2px 4px; border-radius: 4px; border: 1px solid #ccc; }
+        /* 3. 计时器美术强化 */
+        #timer-box {
+            margin-top: 20px; text-align: center; background: rgba(0,0,0,0.3);
+            padding: 10px 40px; border-radius: 15px; border-left: 5px solid var(--danger);
+        }
+        #st { 
+            font-family: 'Courier New', monospace; font-size: 4rem; 
+            font-weight: 900; color: var(--danger); text-shadow: 0 0 15px rgba(255, 71, 87, 0.5);
+            line-height: 1;
+        }
+        .timer-label { font-size: 0.8rem; text-transform: uppercase; color: #888; letter-spacing: 2px; }
 
-        /* 結算彈窗 */
+        #ui-stats { 
+            margin: 15px 0; display: flex; gap: 25px; font-size: 1.1rem; font-weight: bold;
+        }
+        .stat-item span { color: var(--accent); }
+
+        /* 1. 重置按钮美化 */
+        #reset-btn {
+            background: var(--danger); color: white; border: none; padding: 10px 25px;
+            border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;
+            box-shadow: 0 4px 0 #b33939; transition: 0.1s;
+        }
+        #reset-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #b33939; }
+
+        #game-container { position: relative; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+        canvas { background: #333; border-radius: 8px; box-shadow: 0 0 40px rgba(0,0,0,0.5); border: 2px solid #444; }
+
         .modal { 
             display: none; position: fixed; inset: 0; 
-            background: rgba(0,0,0,0.92); backdrop-filter: blur(10px);
+            background: rgba(0,0,0,0.95); backdrop-filter: blur(10px);
             color: white; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
         }
-        .modal-content {
-            background: #fff; color: #333; padding: 30px; border-radius: 24px;
-            width: 85%; max-width: 400px; text-align: center;
-        }
-        .result-line { display: flex; justify-content: space-between; margin: 10px 0; font-size: 16px; border-bottom: 1px solid #f1f1f1; padding-bottom: 5px; }
-        .score-box { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 15px; }
-        .score-val { font-size: 48px; font-weight: 800; color: var(--danger); }
+        .modal-content { background: #fff; color: #333; padding: 30px; border-radius: 24px; width: 80%; max-width: 400px; text-align: center; }
+        .score-val { font-size: 50px; font-weight: 900; color: var(--danger); }
         
-        button { margin-top: 20px; padding: 12px 40px; border: none; border-radius: 10px; background: var(--accent); color: white; font-weight: bold; cursor: pointer; }
-        #msg { position: fixed; top: 15%; font-size: 28px; color: var(--success); font-weight: 900; opacity: 0; transition: 0.4s; pointer-events: none; }
+        #msg { position: fixed; top: 15%; font-size: 32px; color: var(--success); font-weight: 900; opacity: 0; transition: 0.3s; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="msg">LEVEL COMPLETE</div>
-    <div id="ui">
-        <div class="stat-item">關卡: <span id="lv">1</span>/12</div>
-        <div class="stat-item">時間: <span id="st">0</span>s</div>
-        <div class="stat-item">步數: <span id="steps">0</span></div>
-        <div class="stat-item">重置: <span id="rs" style="color:var(--danger)">0</span></div>
+    <div id="msg">LEVEL CLEAR</div>
+    
+    <div id="timer-box">
+        <div class="timer-label">Time Pressure</div>
+        <div id="st">000</div>
+    </div>
+
+    <div id="ui-stats">
+        <div class="stat-item">LV: <span id="lv">1</span>/12</div>
+        <div class="stat-item">STEPS: <span id="steps">0</span></div>
+        <button id="reset-btn">RESET (R)</button>
     </div>
     
     <div id="game-container">
         <canvas id="cvs"></canvas>
-        <div id="hint">手機端：滑動螢幕移動 / 點擊兩次上方「重置」欄位重置<br>電腦端：方向鍵移動 / <kbd>R</kbd> 重置</div>
     </div>
 
     <div id="res" class="modal">
         <div class="modal-content">
-            <h2 style="margin:0 0 10px 0;">挑戰紀錄</h2>
-            <div class="result-line"><span>總步數:</span><span id="f-steps">0</span></div>
-            <div class="result-line"><span>最佳步數:</span><span id="f-min">0</span></div>
-            <div class="result-line"><span>純耗時:</span><span id="f-pure">0s</span></div>
-            <div class="result-line"><span>重置罰時:</span><span id="f-penalty">+0s</span></div>
-            <div class="score-box">
-                <div id="f-score" class="score-val">0</div>
-                <div id="f-rank" style="font-weight:bold; color:var(--accent)">RANK: C</div>
+            <h2 style="margin:0">CHALLENGE COMPLETE</h2>
+            <div id="f-score" class="score-val">0</div>
+            <p id="f-rank" style="font-weight:bold; font-size:1.5rem; color:var(--accent)">RANK: C</p>
+            <div style="text-align:left; margin: 15px 0; border-top: 1px solid #eee; padding-top: 10px; font-size: 0.9rem;">
+                <div>总步数: <span id="f-steps">0</span></div>
+                <div>纯耗时: <span id="f-pure">0</span>s</div>
+                <div>重置罚时: <span id="f-penalty">0</span>s</div>
             </div>
-            <button onclick="location.reload()">重新開始</button>
+            <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:12px 30px; border-radius:8px; font-weight:bold;">TRY AGAIN</button>
         </div>
     </div>
 
 <script>
-const TILE = 70;
+const TILE = 75;
 const ctx = document.getElementById('cvs').getContext('2d');
 let levels = [], queue = [], curIdx = 0, isSwitching = false;
 let state = { p:{x:0, y:0, rx:0, ry:0}, b:[], walls:[], targets:[], resets:0, totalSteps:0, sumMinSteps:0, startTime:0, finished:false };
 
-// --- 滑動手勢邏輯 ---
+// 2. 核心防晃动逻辑
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+// 手机滑动
 let touchStart = null;
 document.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
 document.addEventListener('touchend', e => {
     if (!touchStart || isSwitching || state.finished) return;
     const dx = e.changedTouches[0].clientX - touchStart.x;
     const dy = e.changedTouches[0].clientY - touchStart.y;
-    const absX = Math.abs(dx), absY = Math.abs(dy);
-    if (Math.max(absX, absY) > 30) { // 滑動距離閾值
-        if (absX > absY) move(dx > 0 ? 1 : -1, 0);
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 30) {
+        if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
         else move(0, dy > 0 ? 1 : -1);
     }
     touchStart = null;
 });
 
-// 為了方便手機端重置，點擊 UI 的重置計數器即可觸發
-document.getElementById('rs').parentElement.onclick = () => { if(confirm("確定要重置本關嗎？(將扣500分)")) resetLevel(true); };
+// 重置按钮点击
+document.getElementById('reset-btn').onclick = () => { if(confirm("确定重置本关？(罚时10秒+扣500分)")) resetLevel(true); };
 
 async function init() {
     try {
@@ -104,7 +121,7 @@ async function init() {
         state.startTime = Date.now();
         loadLevel(0);
         requestAnimationFrame(loop);
-    } catch (e) { alert("請確保 levels.json 存在。"); }
+    } catch (e) { alert("请确保 levels.json 在同目录下"); }
 }
 
 function loadLevel(idx) {
@@ -141,9 +158,10 @@ function move(dx, dy) {
 
 function loop() {
     if(state.finished) return;
-    state.p.rx += (state.p.x * TILE - state.p.rx) * 0.25;
-    state.p.ry += (state.p.y * TILE - state.p.ry) * 0.25;
-    state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.25; b.ry += (b.y * TILE - b.ry) * 0.25; });
+    state.p.rx += (state.p.x * TILE - state.p.rx) * 0.28;
+    state.p.ry += (state.p.y * TILE - state.p.ry) * 0.28;
+    state.b.forEach(b => { b.rx += (b.x * TILE - b.rx) * 0.28; b.ry += (b.y * TILE - b.ry) * 0.28; });
+    
     draw();
     updateUI();
     if(!isSwitching && state.b.every(b => state.targets.some(t => t[0]===b.x && t[1]===b.y))) triggerWin();
@@ -152,56 +170,58 @@ function loop() {
 
 function triggerWin() {
     isSwitching = true;
-    if (curIdx < 11) {
-        document.getElementById('msg').style.opacity = 1;
-        setTimeout(() => { document.getElementById('msg').style.opacity = 0; curIdx++; loadLevel(curIdx); }, 600);
-    } else {
-        state.finished = true;
-        showFinalResult();
-    }
+    document.getElementById('msg').style.opacity = 1;
+    setTimeout(() => {
+        document.getElementById('msg').style.opacity = 0;
+        if (curIdx < 11) { curIdx++; loadLevel(curIdx); }
+        else { state.finished = true; showFinalResult(); }
+    }, 600);
 }
 
 function draw() {
     const d = state.walls;
     ctx.canvas.width = d[0].length * TILE; ctx.canvas.height = d.length * TILE;
     d.forEach((r,y) => r.forEach((v,x) => {
-        if(v===1) { ctx.fillStyle="#cfd8dc"; ctx.beginPath(); ctx.roundRect(x*TILE+4, y*TILE+4, TILE-8, TILE-8, 12); ctx.fill(); }
+        if(v===1) { ctx.fillStyle="#444"; ctx.beginPath(); ctx.roundRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4, 8); ctx.fill(); }
+        else { ctx.fillStyle="#2a2a2a"; ctx.fillRect(x*TILE, y*TILE, TILE, TILE); }
     }));
     state.targets.forEach(t => {
-        ctx.strokeStyle="#b2bec3"; ctx.lineWidth=2;
-        ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, 10, 0, 7); ctx.stroke();
+        ctx.strokeStyle=varColor('--success'); ctx.setLineDash([4, 4]); ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
     });
+    // 4. 扩大箱子方块大小 (TILE-14 比例更大，但留有缝隙)
     state.b.forEach(b => {
         const ok = state.targets.some(t => t[0]===b.x && t[1]===b.y);
-        ctx.fillStyle = ok ? "#55efc4" : "#ffb142";
-        ctx.beginPath(); ctx.roundRect(b.rx+14, b.ry+14, TILE-28, TILE-28, 8); ctx.fill();
+        ctx.fillStyle = ok ? varColor('--success') : "#e67e22";
+        ctx.beginPath(); ctx.roundRect(b.rx+7, b.ry+7, TILE-14, TILE-14, 10); ctx.fill();
+        if(ok) { ctx.strokeStyle="white"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(b.rx+TILE/2, b.ry+TILE/2, 6, 0, 7); ctx.stroke(); }
     });
-    ctx.fillStyle="#3498db";
-    ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, 22, 0, 7); ctx.fill();
+    ctx.fillStyle=varColor('--accent'); ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, 25, 0, 7); ctx.fill();
 }
 
+function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name); }
+
 function updateUI() {
-    const elapsed = Math.floor((Date.now() - state.startTime)/1000);
+    const elapsed = (Date.now() - state.startTime)/1000;
+    const displayTime = Math.floor(elapsed + (state.resets * 10));
+    // 3. 让计时器数字呈现更快速（体现秒数）
+    document.getElementById('st').innerText = displayTime.toString().padStart(3, '0');
     document.getElementById('lv').innerText = curIdx + 1;
-    document.getElementById('st').innerText = elapsed + (state.resets * 10);
     document.getElementById('steps').innerText = state.totalSteps;
     document.getElementById('rs').innerText = state.resets;
 }
 
 function showFinalResult() {
     const pureTime = Math.floor((Date.now() - state.startTime)/1000);
-    const penaltyTime = state.resets * 10;
-    const totalTime = pureTime + penaltyTime;
-    let stepRatio = state.sumMinSteps / state.totalSteps;
-    let stepScore = Math.round(5000 * Math.pow(stepRatio, 1.5)); 
+    const totalTime = pureTime + (state.resets * 10);
+    let stepScore = Math.round(5000 * Math.pow(state.sumMinSteps / state.totalSteps, 1.5)); 
     let timeScore = Math.max(0, 5000 - (totalTime - 150) * 50);
     let finalScore = Math.max(0, stepScore + timeScore - (state.resets * 500));
-    let rank = finalScore >= 9200 ? "S" : finalScore >= 8000 ? "A" : finalScore >= 6000 ? "B" : "C";
+    let rank = finalScore >= 9200 ? "S" : finalScore >= 8000 ? "A" : finalScore >= 6500 ? "B" : "C";
 
     document.getElementById('f-steps').innerText = state.totalSteps;
-    document.getElementById('f-min').innerText = state.sumMinSteps;
-    document.getElementById('f-pure').innerText = pureTime + "s";
-    document.getElementById('f-penalty').innerText = "+" + penaltyTime + "s";
+    document.getElementById('f-pure').innerText = pureTime;
+    document.getElementById('f-penalty').innerText = state.resets * 10;
     document.getElementById('f-score').innerText = finalScore.toLocaleString();
     document.getElementById('f-rank').innerText = "RANK: " + rank;
     document.getElementById('res').style.display = 'flex';
@@ -213,7 +233,8 @@ window.onkeydown = e => {
     if(e.key === "ArrowDown") move(0,1);
     if(e.key === "ArrowLeft") move(-1,0);
     if(e.key === "ArrowRight") move(1,0);
-    if(e.key === "r") resetLevel(true);
+    // 1. 保留 R 键重置
+    if(e.key.toLowerCase() === "r") resetLevel(true);
 };
 
 init();
