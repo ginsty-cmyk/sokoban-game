@@ -10,12 +10,19 @@
             --bg: #050505; --panel: rgba(30, 30, 30, 0.85); --accent: #00d2ff; 
             --danger: #ff0040; --success: #00ff88; --text: #ffffff; 
         }
-        * { user-select: none; -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        /* 核心修复：禁止所有默认手势（缩放、滚动、橡皮筋效果） */
+        * { 
+            user-select: none; 
+            -webkit-tap-highlight-color: transparent; 
+            box-sizing: border-box; 
+            /* 核心：禁止全局手势，防止画布乱跑和缩放 */
+            touch-action: none; 
+        }
         body { 
             background: var(--bg); display: flex; flex-direction: column; align-items: center; 
             font-family: 'Orbitron', sans-serif; color: var(--text); 
-            margin: 0; overflow: hidden; height: 100vh; position: relative;
-        }
+            margin: 0; overflow: hidden; height: 100vh; position: fixed; width: 100%;
+        } 
         
         #bg-canvas { position: absolute; top: 0; left: 0; z-index: -1; width: 100%; height: 100%; }
 
@@ -45,6 +52,8 @@
         #reset-btn {
             background: none; color: var(--danger); border: 2px solid var(--danger); padding: 8px 18px;
             font-family: 'Orbitron'; font-weight: 900; cursor: pointer; transition: 0.2s;
+            /* 允许按钮点击，但禁止双击缩放 */
+            touch-action: manipulation; 
         }
         #reset-btn:hover { background: var(--danger); color: white; }
 
@@ -260,8 +269,41 @@ window.addEventListener('keydown', e => {
 
 canvas.tabIndex = 1; 
 initStars(); 
-drawStars(); 
+drawStars();
+    /** * 手机端重置按钮专项修复 */
+const resetBtn = document.getElementById('reset-btn');
+
+function performReset() {
+    if(state.finished || isSwitching) return;
+    // 使用 confirm 会导致手机端失去触控焦点，建议点击后立刻获取焦点
+    if(confirm("ABORT MISSION? -500 PTS")) {
+        state.p.x = state.initP[0];
+        state.p.y = state.initP[1];
+        state.b = state.initB.map(b => ({x:b[0], y:b[1], rx:b[0]*TILE, ry:b[1]*TILE}));
+        state.resets++;
+    }
+    canvas.focus();
+}
+
+// 绑定触摸/点击事件，pointerdown 解决移动端延迟
+resetBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    performReset();
+});
+
+// 修正键盘监听里的 R 键逻辑，确保两者调用同一个函数
+window.addEventListener('keydown', e => {
+    if (state.finished || isSwitching) return;
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+    const k = e.key.toLowerCase();
+    if(k==="arrowup"||k==="w") move(0,-1); 
+    if(k==="arrowdown"||k==="s") move(0,1);
+    if(k==="arrowleft"||k==="a") move(-1,0); 
+    if(k==="arrowright"||k==="d") move(1,0);
+    if(k==="r") performReset(); // 调用统一的重置函数
+});
 startGame(); // 确保最后调用
 </script>
 </body>
 </html>
+
