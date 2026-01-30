@@ -90,7 +90,7 @@
     <div id="ui-stats">
         <div class="stat-item">SECTOR: <span id="lv">1</span>/12</div>
         <div class="stat-item">STP: <span id="steps">0</span></div>
-        <button id="reset-btn">ABORT (R)</button>
+        <button id="reset-btn">Reset (R)</button>
     </div>
     <div id="game-container"><canvas id="cvs"></canvas></div>
 
@@ -169,7 +169,7 @@ function loadLevel(idx) {
 
 function performReset() {
     if(state.finished || isSwitching) return;
-    if(confirm("ABORT MISSION? -500 PTS")) {
+    if(confirm("RESET MISSION? -500 PTS")) {
         state.p.x = state.initP[0]; state.p.y = state.initP[1];
         state.b = state.initB.map(b => ({x:b[0], y:b[1], rx:b[0]*TILE, ry:b[1]*TILE}));
         state.resets++;
@@ -316,6 +316,7 @@ startGame();
 </script>
 </body>
 </html>
+
 
 
 
