@@ -9,14 +9,15 @@
             --bg: #1a1a1a; --panel: #2d2d2d; --accent: #00a8ff; 
             --danger: #ff4757; --success: #2ed573; --text: #f1f2f6; 
         }
-        /* 1. 防止页面滑动晃动 */
-        * { touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        /* 基础样式与防晃动配置 */
+        * { user-select: none; -webkit-tap-highlight-color: transparent; }
         body { 
             background: var(--bg); display: flex; flex-direction: column; align-items: center; 
-            font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); margin: 0; overflow: hidden; height: 100vh; 
+            font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); 
+            margin: 0; overflow: hidden; height: 100vh; 
         }
         
-        /* 3. 计时器美术强化 */
+        /* 计时器美术强化 */
         #timer-box {
             margin-top: 20px; text-align: center; background: rgba(0,0,0,0.3);
             padding: 10px 40px; border-radius: 15px; border-left: 5px solid var(--danger);
@@ -29,21 +30,30 @@
         .timer-label { font-size: 0.8rem; text-transform: uppercase; color: #888; letter-spacing: 2px; }
 
         #ui-stats { 
-            margin: 15px 0; display: flex; gap: 25px; font-size: 1.1rem; font-weight: bold;
+            margin: 15px 0; display: flex; gap: 25px; font-size: 1.1rem; font-weight: bold; align-items: center;
         }
         .stat-item span { color: var(--accent); }
 
-        /* 1. 重置按钮美化 */
+        /* 重置按钮 */
         #reset-btn {
             background: var(--danger); color: white; border: none; padding: 10px 25px;
             border-radius: 10px; font-weight: bold; font-size: 1rem; cursor: pointer;
-            box-shadow: 0 4px 0 #b33939; transition: 0.1s;
+            box-shadow: 0 4px 0 #b33939; transition: 0.1s; outline: none;
         }
         #reset-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #b33939; }
 
-        #game-container { position: relative; flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-        canvas { background: #333; border-radius: 8px; box-shadow: 0 0 40px rgba(0,0,0,0.5); border: 2px solid #444; }
+        #game-container { 
+            position: relative; flex-grow: 1; display: flex; 
+            flex-direction: column; align-items: center; justify-content: center; 
+            width: 100%; touch-action: none; /* 关键：仅在此区域禁用默认触摸 */
+        }
+        canvas { 
+            background: #333; border-radius: 8px; 
+            box-shadow: 0 0 40px rgba(0,0,0,0.5); border: 2px solid #444;
+            outline: none; /* 移除焦点边框 */
+        }
 
+        /* 结算弹窗 */
         .modal { 
             display: none; position: fixed; inset: 0; 
             background: rgba(0,0,0,0.95); backdrop-filter: blur(10px);
@@ -83,22 +93,23 @@
                 <div>纯耗时: <span id="f-pure">0</span>s</div>
                 <div>重置罚时: <span id="f-penalty">0</span>s</div>
             </div>
-            <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:12px 30px; border-radius:8px; font-weight:bold;">TRY AGAIN</button>
+            <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer;">TRY AGAIN</button>
         </div>
     </div>
 
 <script>
 const TILE = 75;
-const ctx = document.getElementById('cvs').getContext('2d');
+const canvas = document.getElementById('cvs');
+const ctx = canvas.getContext('2d');
 let levels = [], queue = [], curIdx = 0, isSwitching = false;
 let state = { p:{x:0, y:0, rx:0, ry:0}, b:[], walls:[], targets:[], resets:0, totalSteps:0, sumMinSteps:0, startTime:0, finished:false };
 
-// 2. 核心防晃动逻辑
-document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-
-// 手机滑动
+// 1. 移动端滑动逻辑
 let touchStart = null;
-document.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+document.addEventListener('touchstart', e => { 
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; 
+}, { passive: true });
+
 document.addEventListener('touchend', e => {
     if (!touchStart || isSwitching || state.finished) return;
     const dx = e.changedTouches[0].clientX - touchStart.x;
@@ -108,12 +119,38 @@ document.addEventListener('touchend', e => {
         else move(0, dy > 0 ? 1 : -1);
     }
     touchStart = null;
-});
+}, { passive: true });
 
-// 重置按钮点击
-document.getElementById('reset-btn').onclick = () => { if(confirm("确定重置本关？(罚时10秒+扣500分)")) resetLevel(true); };
+// 2. 键盘监听增强 (解决部署后失效问题)
+window.addEventListener('keydown', function(e) {
+    if (state.finished || isSwitching) return;
+    
+    // 阻止方向键滚动页面
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) {
+        e.preventDefault();
+    }
+
+    const key = e.key.toLowerCase();
+    switch(key) {
+        case "arrowup": case "w": move(0, -1); break;
+        case "arrowdown": case "s": move(0, 1); break;
+        case "arrowleft": case "a": move(-1, 0); break;
+        case "arrowright": case "d": move(1, 0); break;
+        case "r": resetLevel(true); break;
+    }
+}, false);
+
+// 3. UI 按钮逻辑
+document.getElementById('reset-btn').onclick = () => { 
+    canvas.focus(); // 确保点击后焦点回到游戏
+    if(confirm("确定重置本关？(罚时10秒+分值重扣)")) resetLevel(true); 
+};
 
 async function init() {
+    // 核心：让 Canvas 可接受焦点
+    canvas.tabIndex = 1;
+    canvas.focus();
+
     try {
         const r = await fetch('levels.json');
         levels = await r.json();
@@ -121,7 +158,9 @@ async function init() {
         state.startTime = Date.now();
         loadLevel(0);
         requestAnimationFrame(loop);
-    } catch (e) { alert("请确保 levels.json 在同目录下"); }
+    } catch (e) { 
+        alert("无法加载 levels.json，请检查文件路径。"); 
+    }
 }
 
 function loadLevel(idx) {
@@ -180,41 +219,38 @@ function triggerWin() {
 
 function draw() {
     const d = state.walls;
-    ctx.canvas.width = d[0].length * TILE; ctx.canvas.height = d.length * TILE;
+    canvas.width = d[0].length * TILE; canvas.height = d.length * TILE;
     d.forEach((r,y) => r.forEach((v,x) => {
         if(v===1) { ctx.fillStyle="#444"; ctx.beginPath(); ctx.roundRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4, 8); ctx.fill(); }
         else { ctx.fillStyle="#2a2a2a"; ctx.fillRect(x*TILE, y*TILE, TILE, TILE); }
     }));
     state.targets.forEach(t => {
-        ctx.strokeStyle=varColor('--success'); ctx.setLineDash([4, 4]); ctx.lineWidth=2;
+        ctx.strokeStyle="#2ed573"; ctx.setLineDash([4, 4]); ctx.lineWidth=2;
         ctx.beginPath(); ctx.arc(t[0]*TILE+TILE/2, t[1]*TILE+TILE/2, 12, 0, 7); ctx.stroke(); ctx.setLineDash([]);
     });
-    // 4. 扩大箱子方块大小 (TILE-14 比例更大，但留有缝隙)
+    // 箱子扩大尺寸 (TILE-14)
     state.b.forEach(b => {
         const ok = state.targets.some(t => t[0]===b.x && t[1]===b.y);
-        ctx.fillStyle = ok ? varColor('--success') : "#e67e22";
+        ctx.fillStyle = ok ? "#2ed573" : "#e67e22";
         ctx.beginPath(); ctx.roundRect(b.rx+7, b.ry+7, TILE-14, TILE-14, 10); ctx.fill();
         if(ok) { ctx.strokeStyle="white"; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(b.rx+TILE/2, b.ry+TILE/2, 6, 0, 7); ctx.stroke(); }
     });
-    ctx.fillStyle=varColor('--accent'); ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, 25, 0, 7); ctx.fill();
+    ctx.fillStyle="#00a8ff"; ctx.beginPath(); ctx.arc(state.p.rx+TILE/2, state.p.ry+TILE/2, 25, 0, 7); ctx.fill();
 }
-
-function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name); }
 
 function updateUI() {
     const elapsed = (Date.now() - state.startTime)/1000;
     const displayTime = Math.floor(elapsed + (state.resets * 10));
-    // 3. 让计时器数字呈现更快速（体现秒数）
     document.getElementById('st').innerText = displayTime.toString().padStart(3, '0');
     document.getElementById('lv').innerText = curIdx + 1;
     document.getElementById('steps').innerText = state.totalSteps;
-    document.getElementById('rs').innerText = state.resets;
 }
 
 function showFinalResult() {
     const pureTime = Math.floor((Date.now() - state.startTime)/1000);
     const totalTime = pureTime + (state.resets * 10);
-    let stepScore = Math.round(5000 * Math.pow(state.sumMinSteps / state.totalSteps, 1.5)); 
+    let stepRatio = state.sumMinSteps / state.totalSteps;
+    let stepScore = Math.round(5000 * Math.pow(stepRatio, 1.5)); 
     let timeScore = Math.max(0, 5000 - (totalTime - 150) * 50);
     let finalScore = Math.max(0, stepScore + timeScore - (state.resets * 500));
     let rank = finalScore >= 9200 ? "S" : finalScore >= 8000 ? "A" : finalScore >= 6500 ? "B" : "C";
@@ -227,16 +263,7 @@ function showFinalResult() {
     document.getElementById('res').style.display = 'flex';
 }
 
-window.onkeydown = e => {
-    if(e.key.includes("Arrow")) e.preventDefault();
-    if(e.key === "ArrowUp") move(0,-1);
-    if(e.key === "ArrowDown") move(0,1);
-    if(e.key === "ArrowLeft") move(-1,0);
-    if(e.key === "ArrowRight") move(1,0);
-    // 1. 保留 R 键重置
-    if(e.key.toLowerCase() === "r") resetLevel(true);
-};
-
+// 自动初始化
 init();
 </script>
 </body>
